@@ -181,15 +181,15 @@ class OnlyBeautySalaryCalculator:
         self.consultant_count = len(consultants)
         return consultants
     
-    def calculate_consultant_bonus(self, product_bonuses: Dict = None) -> tuple:
-        """計算顧問獎金（累進制），產品未達標者清零，返回 (顧問獎金字典, 業績獎金池, 消耗獎金池)"""
+    def calculate_consultant_bonus(self, product_bonuses: Dict = None) -> Dict:
+        """計算顧問獎金（累進制），產品未達標者清零"""
         if self.excel_data is None:
-            return {}, 0, 0
+            return {}
         total_performance = self.excel_data.iloc[4, 4] if not pd.isna(self.excel_data.iloc[4, 4]) else 0  # E5
         total_consumption = self.excel_data.iloc[6, 4] if not pd.isna(self.excel_data.iloc[6, 4]) else 0  # E7
         consultants = self.get_consultants_data()
         if not consultants:
-            return {}, 0, 0
+            return {}
         print(f"總業績 (E5): {total_performance:,.0f}")
         print(f"總消耗 (E7): {total_consumption:,.0f}")
         # 業績獎金累進制
@@ -237,24 +237,18 @@ class OnlyBeautySalaryCalculator:
                 'personal_consumption': consultant['consumption'],
                 'product_qualified': product_qualified
             }
-        return consultant_bonuses, consultant_performance_pool, consultant_consumption_pool
+        return consultant_bonuses
 
-    def calculate_staff_bonus(self, consultant_performance_pool: float = None, consultant_consumption_pool: float = None) -> Dict:
+    def calculate_staff_bonus(self) -> Dict:
         """計算美容師/護士獎金（累進制）"""
         if self.excel_data is None or self.staff_count == 0:
             return {}
-        
-        # 如果沒有提供顧問獎金池，重新計算（但不顯示詳細階段）
-        if consultant_performance_pool is None or consultant_consumption_pool is None:
-            total_performance = self.excel_data.iloc[4, 4] if not pd.isna(self.excel_data.iloc[4, 4]) else 0  # E5
-            total_consumption = self.excel_data.iloc[6, 4] if not pd.isna(self.excel_data.iloc[6, 4]) else 0  # E7
-            consultant_performance_pool = self.calc_progressive_bonus(total_performance, self.performance_bonus_levels, show_detail=False) * 0.7
-            consultant_consumption_pool = self.calc_progressive_bonus(total_consumption, self.consumption_bonus_levels, show_detail=False) * 0.4
-        
-        # 美容師/護士獎金池（剩餘部分）
-        staff_performance_pool = consultant_performance_pool / 0.7 * 0.3  # 從70%推算100%，再取30%
-        staff_consumption_pool = consultant_consumption_pool / 0.4 * 0.6   # 從40%推算100%，再取60%
-        
+        total_performance = self.excel_data.iloc[4, 4] if not pd.isna(self.excel_data.iloc[4, 4]) else 0  # E5
+        total_consumption = self.excel_data.iloc[6, 4] if not pd.isna(self.excel_data.iloc[6, 4]) else 0  # E7
+        # 業績獎金累進制
+        staff_performance_pool = self.calc_progressive_bonus(total_performance, self.performance_bonus_levels) * 0.3
+        # 消耗獎金累進制
+        staff_consumption_pool = self.calc_progressive_bonus(total_consumption, self.consumption_bonus_levels) * 0.6
         performance_bonus_per_person = staff_performance_pool / self.staff_count
         consumption_bonus_per_person = staff_consumption_pool / self.staff_count
         return {
@@ -416,7 +410,7 @@ class OnlyBeautySalaryCalculator:
                         # 檢查F欄 (index 5) 是否包含 "購產品"
                         f_cell = df.iloc[row_idx, 5] if row_idx < len(df) and 5 < len(df.columns) else None
                         
-                        if pd.notna(f_cell) and str(f_cell).strip() == "購產品":
+                        if pd.notna(f_cell) and "購產品" in str(f_cell):
                             # 取得O欄 (index 14) 的顧問代號
                             o_cell = df.iloc[row_idx, 14] if row_idx < len(df) and 14 < len(df.columns) else None
                             
@@ -511,14 +505,14 @@ class OnlyBeautySalaryCalculator:
             
             # 步驟3: 輸入店長名稱
             while True:
-                manager_input = input("請輸入店長名稱 (如果沒有店長請輸入 'n'): ").strip()
+                manager_input = input("請輸入店長名稱 (如果沒有店長請輸入 'none'): ").strip()
                 
                 # 檢查退出命令
                 if manager_input.lower() in ['exit', 'quit', 'q']:
                     print("程式已退出")
                     return
                 
-                if manager_input.lower() in ['n', 'none']:
+                if manager_input.lower() == 'none':
                     self.manager_name = None
                     print("已設定無店長")
                     break
@@ -527,7 +521,7 @@ class OnlyBeautySalaryCalculator:
                     print(f"店長設定為: {self.manager_name}")
                     break
                 else:
-                    print("請輸入店長名稱或 'n'")
+                    print("請輸入店長名稱或 'none'")
             
             # 步驟4: 統計產品銷售並計算產品達標獎金
             print("\n開始統計產品銷售...")
@@ -536,8 +530,8 @@ class OnlyBeautySalaryCalculator:
             
             # 步驟5: 計算團體獎金（考慮產品達標狀況）
             print("\n開始計算團體獎金...")
-            consultant_bonuses, consultant_performance_pool, consultant_consumption_pool = self.calculate_consultant_bonus(product_bonuses)
-            staff_bonuses = self.calculate_staff_bonus(consultant_performance_pool, consultant_consumption_pool)
+            consultant_bonuses = self.calculate_consultant_bonus(product_bonuses)
+            staff_bonuses = self.calculate_staff_bonus()
             
             # 步驟6: 計算個人獎金
             individual_bonuses = self.calculate_individual_bonus(consultant_bonuses)
