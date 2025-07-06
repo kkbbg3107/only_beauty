@@ -47,6 +47,12 @@ class OnlyBeautySalaryCalculator:
             (600001, float('inf'), 0.012)
         ]
         
+        # 高標達標獎金設定
+        self.high_target_bonuses = {
+            '美容師': 5000,
+            '護理師': 10000
+        }
+        
         self.excel_data = None
         self.consultant_count = 0
         self.staff_count = 0
@@ -266,12 +272,16 @@ class OnlyBeautySalaryCalculator:
             'total_bonus_per_person': performance_bonus_per_person + consumption_bonus_per_person
         }
     
-    def calculate_individual_bonus(self, consultant_bonuses: Dict) -> Dict:
+    def calculate_individual_bonus(self, consultant_bonuses: Dict, high_target_amount: float = None) -> Dict:
         """計算個人業績獎金和個人消耗獎金"""
         individual_bonuses = {}
         
         print("\n開始計算個人獎金...")
         print(f"店長: {self.manager_name}")
+        
+        # 獲取門店業績數據
+        total_performance = self.excel_data.iloc[4, 4] if not pd.isna(self.excel_data.iloc[4, 4]) else 0  # E5
+        store_achieved = high_target_amount and total_performance >= high_target_amount
         
         for name, bonus_data in consultant_bonuses.items():
             performance = bonus_data['personal_performance']
@@ -296,21 +306,228 @@ class OnlyBeautySalaryCalculator:
             # 計算個人消耗獎金
             individual_consumption_bonus = self.calc_progressive_bonus(consumption, cons_levels, show_detail=False)
             
+            # 計算業績達標激勵獎金 (個人達成低標168萬 + 門店達標)
+            performance_incentive_bonus = 0
+            if performance >= 1680000 and store_achieved:
+                performance_incentive_bonus = 10000
+            
             individual_bonuses[name] = {
                 'role': role,
                 'individual_performance_bonus': individual_performance_bonus,
                 'individual_consumption_bonus': individual_consumption_bonus,
+                'performance_incentive_bonus': performance_incentive_bonus,  # 新增
                 'individual_total': individual_performance_bonus + individual_consumption_bonus
             }
             
             print(f"  {name} ({role}):")
             print(f"    個人業績獎金: {individual_performance_bonus:,.0f}")
             print(f"    個人消耗獎金: {individual_consumption_bonus:,.0f}")
+            if performance_incentive_bonus > 0:
+                print(f"    業績達標激勵獎金: {performance_incentive_bonus:,.0f} (不計入當月總薪資)")
             print(f"    個人獎金小計: {individual_performance_bonus + individual_consumption_bonus:,.0f}")
         
         return individual_bonuses
     
-    def display_results(self, consultant_bonuses: Dict, staff_bonuses: Dict, product_bonuses: Dict = None, individual_bonuses: Dict = None):
+    def get_individual_staff_data(self) -> List[Dict]:
+        """獲取個別美容師/護理師/櫃檯資料"""
+        if self.excel_data is None:
+            return []
+        
+        staff_data = []
+        
+        # 美容師資料 (K9-K15, L9-L15, M9-M15)
+        for row in range(8, 15):  # K9-K15 對應 index 8-14
+            if row < len(self.excel_data):
+                name = self.excel_data.iloc[row, 10]  # K欄 (index 10)
+                base_salary = 31054  # 默認31054
+                hand_skill_bonus = self.excel_data.iloc[row, 12] if not pd.isna(self.excel_data.iloc[row, 12]) else 0  # M欄
+                
+                if pd.notna(name) and str(name).strip():
+                    staff_data.append({
+                        'name': str(name).strip(),
+                        'position': '美容師',
+                        'base_salary': float(base_salary),
+                        'hand_skill_bonus': float(hand_skill_bonus),
+                        'row': row + 1
+                    })
+        
+        # 美容師資料 (N9-N15, O9-O15, P9-P15)
+        for row in range(8, 15):  # N9-N15 對應 index 8-14
+            if row < len(self.excel_data):
+                name = self.excel_data.iloc[row, 13]  # N欄 (index 13)
+                base_salary = self.excel_data.iloc[row, 14] if not pd.isna(self.excel_data.iloc[row, 14]) else 31054  # O欄，默認31054
+                hand_skill_bonus = self.excel_data.iloc[row, 15] if not pd.isna(self.excel_data.iloc[row, 15]) else 0  # P欄
+                
+                if pd.notna(name) and str(name).strip():
+                    staff_data.append({
+                        'name': str(name).strip(),
+                        'position': '美容師',
+                        'base_salary': float(base_salary),
+                        'hand_skill_bonus': float(hand_skill_bonus),
+                        'row': row + 1
+                    })
+        
+        # 護理師資料 (Q9-Q11)
+        for row in range(8, 11):  # Q9-Q11 對應 index 8-10
+            if row < len(self.excel_data):
+                name = self.excel_data.iloc[row, 16]  # Q欄 (index 16)
+                base_salary = 31175  # 默認31175
+                hand_skill_bonus = self.excel_data.iloc[row, 18] if not pd.isna(self.excel_data.iloc[row, 18]) else 0  # S欄
+                
+                if pd.notna(name) and str(name).strip():
+                    staff_data.append({
+                        'name': str(name).strip(),
+                        'position': '護理師',
+                        'base_salary': float(base_salary),
+                        'hand_skill_bonus': float(hand_skill_bonus),
+                        'row': row + 1
+                    })
+        
+        # 櫃檯資料 (Q12-Q15)
+        for row in range(11, 15):  # Q12-Q15 對應 index 11-14
+            if row < len(self.excel_data):
+                name = self.excel_data.iloc[row, 16]  # Q欄 (index 16)
+                base_salary = 31054  # 默認31054
+                hand_skill_bonus = self.excel_data.iloc[row, 18] if not pd.isna(self.excel_data.iloc[row, 18]) else 0  # S欄
+                
+                if pd.notna(name) and str(name).strip():
+                    staff_data.append({
+                        'name': str(name).strip(),
+                        'position': '櫃檯',
+                        'base_salary': float(base_salary),
+                        'hand_skill_bonus': float(hand_skill_bonus),
+                        'row': row + 1
+                    })
+        
+        return staff_data
+    
+    def calculate_high_target_bonus(self, high_target_amount: float = None) -> Dict:
+        """計算高標達標獎金"""
+        if high_target_amount is None:
+            return {}
+        
+        # 比對 E5 總業績
+        total_performance = self.excel_data.iloc[4, 4] if not pd.isna(self.excel_data.iloc[4, 4]) else 0  # E5
+        
+        if total_performance < high_target_amount:
+            print(f"總業績 {total_performance:,.0f} 未達高標 {high_target_amount:,.0f}，無高標達標獎金")
+            return {}
+        
+        print(f"總業績 {total_performance:,.0f} 達到高標 {high_target_amount:,.0f}，開始分配高標達標獎金")
+        
+        # 獲取個別員工資料
+        staff_data = self.get_individual_staff_data()
+        high_target_bonuses = {}
+        
+        for staff in staff_data:
+            if staff['position'] in self.high_target_bonuses:
+                bonus_amount = self.high_target_bonuses[staff['position']]
+                high_target_bonuses[staff['name']] = {
+                    'position': staff['position'],
+                    'bonus': bonus_amount
+                }
+                print(f"  {staff['name']} ({staff['position']}): {bonus_amount:,} 元")
+        
+        return high_target_bonuses
+    
+    def calculate_individual_staff_salary(self, high_target_bonuses: Dict = None, staff_team_bonus: Dict = None, high_target_amount: float = None) -> Dict:
+        """計算個別美容師/護理師/櫃檯的完整薪資明細"""
+        staff_data = self.get_individual_staff_data()
+        salary_details = {}
+        
+        # 獲取業績和消耗數據用於櫃檯獎金計算
+        total_performance = self.excel_data.iloc[4, 4] if not pd.isna(self.excel_data.iloc[4, 4]) else 0  # E5
+        total_consumption = self.excel_data.iloc[6, 4] if not pd.isna(self.excel_data.iloc[6, 4]) else 0  # E7
+        
+        # 團體獎金 per person
+        team_performance_bonus = 0
+        team_consumption_bonus = 0
+        if staff_team_bonus:
+            team_performance_bonus = staff_team_bonus.get('performance_bonus_per_person', 0)
+            team_consumption_bonus = staff_team_bonus.get('consumption_bonus_per_person', 0)
+        
+        for staff in staff_data:
+            name = staff['name']
+            position = staff['position']
+            base_salary = staff['base_salary']  # Excel中存放的就是最終底薪
+            hand_skill_bonus = staff['hand_skill_bonus']
+            
+            # 不需要分解底薪和加班費，直接使用Excel中的值
+            overtime_pay = 0  # 加班費已包含在底薪中
+            
+            # 高標達標獎金
+            high_target_bonus = 0
+            if high_target_bonuses and name in high_target_bonuses:
+                high_target_bonus = high_target_bonuses[name]['bonus']
+            
+            # 根據職位設定固定津貼
+            license_allowance = 0
+            full_attendance_bonus = 0
+            rank_bonus = 0
+            position_allowance = 0
+            
+            # 櫃檯專用獎金
+            consumption_achievement_bonus = 0  # 門店業績達標同時消耗300萬獎金
+            performance_500w_bonus = 0         # 業績500萬獎金
+            store_performance_incentive = 0    # 門店業績激勵獎金
+            
+            if position == '護理師':
+                license_allowance = 5000      # 執照津貼 5000元/月
+                full_attendance_bonus = 2000  # 全勤獎金 2000元 (季度發放)
+            elif position == '櫃檯':
+                rank_bonus = 1946            # 職等獎金 1946元
+                position_allowance = 2000    # 職務津貼 2000元
+                
+                # 櫃檯新增獎金規則
+                # 1. 門店業績達標同時消耗300萬得獎金3000
+                if high_target_amount and total_performance >= high_target_amount and total_consumption >= 3000000:
+                    consumption_achievement_bonus = 3000
+                
+                # 2. 業績(E5)目標500萬獎金5000
+                if total_performance >= 5000000:
+                    performance_500w_bonus = 5000
+                
+                # 3. 業績達標激勵獎金(門店業績激勵獎金)5000
+                if high_target_amount and total_performance >= high_target_amount:
+                    store_performance_incentive = 5000
+            
+            # 計算當月總薪資 (美容師/護理師不包含團體獎金，櫃檯正常計算)
+            if position == '美容師':
+                # 當月總薪資 = 底薪 + 手技獎金 + 高標達標獎金
+                total_salary = (base_salary + overtime_pay + hand_skill_bonus + high_target_bonus + 
+                              license_allowance + rank_bonus + position_allowance)
+            elif position == '護理師':
+                # 當月總薪資 = 底薪 + 手技獎金 + 高標達標獎金 + 執照津貼 (全勤獎金不計入)
+                total_salary = (base_salary + overtime_pay + hand_skill_bonus + high_target_bonus + 
+                              license_allowance + rank_bonus + position_allowance)
+            else:  # 櫃檯
+                total_salary = (base_salary + overtime_pay + hand_skill_bonus + high_target_bonus + 
+                              license_allowance + 
+                              rank_bonus + position_allowance + consumption_achievement_bonus + 
+                              performance_500w_bonus + store_performance_incentive)
+            
+            salary_details[name] = {
+                'position': position,
+                'base_salary': base_salary,
+                'overtime_pay': overtime_pay,
+                'hand_skill_bonus': hand_skill_bonus,
+                'team_performance_bonus': team_performance_bonus if position in ['美容師', '護理師'] else 0,
+                'team_consumption_bonus': team_consumption_bonus if position in ['美容師', '護理師'] else 0,
+                'high_target_bonus': high_target_bonus,
+                'license_allowance': license_allowance,
+                'full_attendance_bonus': full_attendance_bonus,
+                'rank_bonus': rank_bonus,
+                'position_allowance': position_allowance,
+                'consumption_achievement_bonus': consumption_achievement_bonus,  # 櫃檯專用
+                'performance_500w_bonus': performance_500w_bonus,               # 櫃檯專用
+                'store_performance_incentive': store_performance_incentive,     # 櫃檯專用
+                'total_salary': total_salary,
+                'row': staff['row']
+            }
+        
+        return salary_details
+    
+    def display_results(self, consultant_bonuses: Dict, staff_bonuses: Dict, product_bonuses: Dict = None, individual_bonuses: Dict = None, individual_staff_salaries: Dict = None, high_target_bonuses: Dict = None):
         """顯示計算結果"""
         print("\n" + "="*70)
         print("薪資計算結果")
@@ -341,21 +558,20 @@ class OnlyBeautySalaryCalculator:
                 # 加入個人獎金
                 individual_performance_bonus = 0
                 individual_consumption_bonus = 0
+                performance_incentive_bonus = 0
                 if individual_bonuses and name in individual_bonuses:
                     individual_performance_bonus = individual_bonuses[name]['individual_performance_bonus']
                     individual_consumption_bonus = individual_bonuses[name]['individual_consumption_bonus']
+                    performance_incentive_bonus = individual_bonuses[name].get('performance_incentive_bonus', 0)
                     role = individual_bonuses[name]['role']
                     print(f"  個人業績獎金: {individual_performance_bonus:,.0f} ({role})")
                     print(f"  個人消耗獎金: {individual_consumption_bonus:,.0f} ({role})")
                 
-                team_total = bonus['total_bonus'] + product_bonus
-                individual_total = individual_performance_bonus + individual_consumption_bonus
-                grand_total = team_total + individual_total
+                # 業績達標激勵獎金單獨顯示 (不計入當月總薪資)
+                if performance_incentive_bonus > 0:
+                    print("")
+                    print(f"  業績達標激勵獎金: {performance_incentive_bonus:,.0f} (不計入當月總薪資)")
                 
-                print(f"  團體獎金小計: {bonus['total_bonus']:,.0f}")
-                print(f"  團體+產品獎金: {team_total:,.0f}")
-                print(f"  個人獎金小計: {individual_total:,.0f}")
-                print(f"  【總獎金】: {grand_total:,.0f}")
                 print()
         
         if staff_bonuses:
@@ -375,6 +591,73 @@ class OnlyBeautySalaryCalculator:
             qualified_count = sum(1 for p in product_bonuses.values() if p['qualified'])
             print(f"達標人數: {qualified_count} 人")
             print(f"產品達標獎金總額: {total_product_bonus:,.0f} 元")
+        
+        if high_target_bonuses:
+            print("\n高標達標獎金:")
+            print("-" * 60)
+            total_high_target = sum(h['bonus'] for h in high_target_bonuses.values())
+            for name, bonus_data in high_target_bonuses.items():
+                print(f"{name} ({bonus_data['position']}): {bonus_data['bonus']:,} 元")
+            print(f"高標達標獎金總額: {total_high_target:,} 元")
+        
+        if individual_staff_salaries:
+            print("\n個別員工薪資明細:")
+            print("-" * 80)
+            
+            # 按職位分組顯示
+            positions = ['美容師', '護理師', '櫃檯']
+            for position in positions:
+                position_staff = {name: data for name, data in individual_staff_salaries.items() 
+                                if data['position'] == position}
+                
+                if position_staff:
+                    print(f"\n{position}:")
+                    print("-" * 60)
+                    
+                    for name, salary_data in position_staff.items():
+                        print(f"{name} (第{salary_data['row']}行):")
+                        print(f"  底薪: {salary_data['base_salary']:,.0f}")
+                        if salary_data['overtime_pay'] > 0:
+                            print(f"  加班費: {salary_data['overtime_pay']:,.0f}")
+                        if salary_data['hand_skill_bonus'] > 0:
+                            print(f"  手技獎金: {salary_data['hand_skill_bonus']:,.0f}")
+                        if salary_data['high_target_bonus'] > 0:
+                            print(f"  高標達標獎金: {salary_data['high_target_bonus']:,.0f}")
+                        if salary_data['license_allowance'] > 0:
+                            print(f"  執照津貼: {salary_data['license_allowance']:,.0f}")
+                        if salary_data['full_attendance_bonus'] > 0:
+                            print(f"  全勤獎金: {salary_data['full_attendance_bonus']:,.0f}")
+                        if salary_data['rank_bonus'] > 0:
+                            print(f"  職等獎金: {salary_data['rank_bonus']:,.0f}")
+                        if salary_data['position_allowance'] > 0:
+                            print(f"  職務津貼: {salary_data['position_allowance']:,.0f}")
+                        
+                        # 櫃檯專用獎金
+                        if position == '櫃檯':
+                            if salary_data.get('consumption_achievement_bonus', 0) > 0:
+                                print(f"  門店業績達標+消耗300萬獎金: {salary_data['consumption_achievement_bonus']:,.0f}")
+                            if salary_data.get('performance_500w_bonus', 0) > 0:
+                                print(f"  業績500萬獎金: {salary_data['performance_500w_bonus']:,.0f}")
+                            if salary_data.get('store_performance_incentive', 0) > 0:
+                                print(f"  門店業績激勵獎金: {salary_data['store_performance_incentive']:,.0f}")
+                        
+                        print(f"  【當月總薪資】: {salary_data['total_salary']:,.0f}")
+                        
+                        # 團體獎金單獨顯示 (不計入當月總薪資)
+                        if position in ['美容師', '護理師']:
+                            separate_items = []
+                            if salary_data['team_performance_bonus'] > 0:
+                                separate_items.append(f"團體業績獎金: {salary_data['team_performance_bonus']:,.0f}")
+                            if salary_data['team_consumption_bonus'] > 0:
+                                separate_items.append(f"團體消耗獎金: {salary_data['team_consumption_bonus']:,.0f}")
+                            if position == '護理師' and salary_data['full_attendance_bonus'] > 0:
+                                separate_items.append(f"全勤獎金: {salary_data['full_attendance_bonus']:,.0f}")
+                            
+                            if separate_items:
+                                print("")
+                                for item in separate_items:
+                                    print(f"  {item} (不計入當月總薪資)")
+                        print()
     
     def calc_progressive_bonus(self, amount: float, levels: List[tuple], show_detail: bool = True) -> float:
         """累進制計算獎金，levels=[(min,max,rate), ...]"""
@@ -529,21 +812,55 @@ class OnlyBeautySalaryCalculator:
                 else:
                     print("請輸入店長名稱或 'n'")
             
-            # 步驟4: 統計產品銷售並計算產品達標獎金
+            # 步驟4: 輸入高標達標獎金 (可選)
+            high_target_amount = None
+            while True:
+                try:
+                    high_target_input = input("請輸入高標達標金額 (不設定請直接按Enter): ").strip()
+                    
+                    # 檢查退出命令
+                    if high_target_input.lower() in ['exit', 'quit', 'q']:
+                        print("程式已退出")
+                        return
+                    
+                    if not high_target_input:
+                        print("未設定高標達標獎金")
+                        break
+                    
+                    high_target_amount = float(high_target_input)
+                    if high_target_amount > 0:
+                        print(f"高標達標金額設定為: {high_target_amount:,.0f}")
+                        break
+                    else:
+                        print("金額必須大於0")
+                except ValueError:
+                    print("請輸入有效的數字或直接按Enter跳過")
+            
+            # 步驟5: 統計產品銷售並計算產品達標獎金
             print("\n開始統計產品銷售...")
             product_sales = self.get_product_sales_statistics(excel_path)
             product_bonuses = self.calculate_product_bonus(product_sales)
             
-            # 步驟5: 計算團體獎金（考慮產品達標狀況）
+            # 步驟6: 計算團體獎金（考慮產品達標狀況）
             print("\n開始計算團體獎金...")
             consultant_bonuses, consultant_performance_pool, consultant_consumption_pool = self.calculate_consultant_bonus(product_bonuses)
             staff_bonuses = self.calculate_staff_bonus(consultant_performance_pool, consultant_consumption_pool)
             
-            # 步驟6: 計算個人獎金
-            individual_bonuses = self.calculate_individual_bonus(consultant_bonuses)
+            # 步驟7: 計算個人獎金
+            individual_bonuses = self.calculate_individual_bonus(consultant_bonuses, high_target_amount)
             
-            # 步驟7: 顯示結果
-            self.display_results(consultant_bonuses, staff_bonuses, product_bonuses, individual_bonuses)
+            # 步驟8: 計算高標達標獎金
+            high_target_bonuses = {}
+            if high_target_amount:
+                print(f"\n開始計算高標達標獎金 (目標: {high_target_amount:,.0f})...")
+                high_target_bonuses = self.calculate_high_target_bonus(high_target_amount)
+            
+            # 步驟9: 計算個別員工薪資明細
+            print("\n開始計算個別員工薪資...")
+            individual_staff_salaries = self.calculate_individual_staff_salary(high_target_bonuses, staff_bonuses)
+            
+            # 步驟10: 顯示結果
+            self.display_results(consultant_bonuses, staff_bonuses, product_bonuses, individual_bonuses, individual_staff_salaries, high_target_bonuses)
             
         except KeyboardInterrupt:
             print("\n\n程式已被用戶中斷 (Ctrl+C)")

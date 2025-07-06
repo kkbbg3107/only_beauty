@@ -361,14 +361,6 @@ class OnlyBeautySalaryCalculator:
             print(f"每人業績獎金: {staff_bonuses['performance_bonus_per_person']:,.0f}")
             print(f"每人消耗獎金: {staff_bonuses['consumption_bonus_per_person']:,.0f}")
             print(f"每人總獎金: {staff_bonuses['total_bonus_per_person']:,.0f}")
-        
-        if product_bonuses:
-            print("\n產品達標獎金摘要:")
-            print("-" * 60)
-            total_product_bonus = sum(p['bonus'] for p in product_bonuses.values())
-            qualified_count = sum(1 for p in product_bonuses.values() if p['qualified'])
-            print(f"達標人數: {qualified_count} 人")
-            print(f"產品達標獎金總額: {total_product_bonus:,.0f} 元")
     
     def calc_progressive_bonus(self, amount: float, levels: List[tuple], show_detail: bool = True) -> float:
         """累進制計算獎金，levels=[(min,max,rate), ...]"""
