@@ -493,12 +493,12 @@ class OnlyBeautySalaryCalculator:
             
             # 計算當月總薪資 (美容師/護理師不包含團體獎金，櫃檯正常計算)
             if position == '美容師':
-                # 當月總薪資 = 底薪 + 手技獎金 + 高標達標獎金
-                total_salary = (base_salary + overtime_pay + hand_skill_bonus + high_target_bonus + 
+                # 當月總薪資 = 底薪 + 手技獎金 (高標達標獎金不計入)
+                total_salary = (base_salary + overtime_pay + hand_skill_bonus + 
                               license_allowance + rank_bonus + position_allowance)
             elif position == '護理師':
-                # 當月總薪資 = 底薪 + 手技獎金 + 高標達標獎金 + 執照津貼 (全勤獎金不計入)
-                total_salary = (base_salary + overtime_pay + hand_skill_bonus + high_target_bonus + 
+                # 當月總薪資 = 底薪 + 手技獎金 + 執照津貼 (全勤獎金、高標達標獎金不計入)
+                total_salary = (base_salary + overtime_pay + hand_skill_bonus + 
                               license_allowance + rank_bonus + position_allowance)
             else:  # 櫃檯
                 total_salary = (base_salary + overtime_pay + hand_skill_bonus + high_target_bonus + 
@@ -584,14 +584,6 @@ class OnlyBeautySalaryCalculator:
             print(f"每人消耗獎金: {staff_bonuses['consumption_bonus_per_person']:,.0f}")
             print(f"每人總獎金: {staff_bonuses['total_bonus_per_person']:,.0f}")
         
-        if product_bonuses:
-            print("\n產品達標獎金摘要:")
-            print("-" * 60)
-            total_product_bonus = sum(p['bonus'] for p in product_bonuses.values())
-            qualified_count = sum(1 for p in product_bonuses.values() if p['qualified'])
-            print(f"達標人數: {qualified_count} 人")
-            print(f"產品達標獎金總額: {total_product_bonus:,.0f} 元")
-        
         if high_target_bonuses:
             print("\n高標達標獎金:")
             print("-" * 60)
@@ -621,8 +613,6 @@ class OnlyBeautySalaryCalculator:
                             print(f"  加班費: {salary_data['overtime_pay']:,.0f}")
                         if salary_data['hand_skill_bonus'] > 0:
                             print(f"  手技獎金: {salary_data['hand_skill_bonus']:,.0f}")
-                        if salary_data['high_target_bonus'] > 0:
-                            print(f"  高標達標獎金: {salary_data['high_target_bonus']:,.0f}")
                         if salary_data['license_allowance'] > 0:
                             print(f"  執照津貼: {salary_data['license_allowance']:,.0f}")
                         if salary_data['full_attendance_bonus'] > 0:
@@ -634,6 +624,8 @@ class OnlyBeautySalaryCalculator:
                         
                         # 櫃檯專用獎金
                         if position == '櫃檯':
+                            if salary_data['high_target_bonus'] > 0:
+                                print(f"  高標達標獎金: {salary_data['high_target_bonus']:,.0f}")
                             if salary_data.get('consumption_achievement_bonus', 0) > 0:
                                 print(f"  門店業績達標+消耗300萬獎金: {salary_data['consumption_achievement_bonus']:,.0f}")
                             if salary_data.get('performance_500w_bonus', 0) > 0:
@@ -652,6 +644,8 @@ class OnlyBeautySalaryCalculator:
                                 separate_items.append(f"團體消耗獎金: {salary_data['team_consumption_bonus']:,.0f}")
                             if position == '護理師' and salary_data['full_attendance_bonus'] > 0:
                                 separate_items.append(f"全勤獎金: {salary_data['full_attendance_bonus']:,.0f}")
+                            if salary_data['high_target_bonus'] > 0:
+                                separate_items.append(f"高標達標獎金: {salary_data['high_target_bonus']:,.0f}")
                             
                             if separate_items:
                                 print("")
