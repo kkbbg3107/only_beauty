@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Only Beauty 薪資計算系統</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Only Beauty 薪資計算系統</h1>
+            <p class="subtitle">網頁版薪資計算工具</p>
+        </header>
+
+        <main>
+            <!-- 步驟1: 檔案上傳 -->
+            <section class="step" id="step1">
+                <h2>步驟 1: 上傳Excel檔案</h2>
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-content">
+                        <i class="upload-icon">📊</i>
+                        <p>拖拽Excel檔案到此處，或點擊選擇檔案</p>
+                        <p class="file-info">支援格式: .xlsx, .xls</p>
+                        <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none;">
+                        <button type="button" class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                            選擇檔案
+                        </button>
+                    </div>
+                </div>
+                <div class="progress-container" id="progressContainer" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">解析中... 0%</div>
+                </div>
+                <div class="file-status" id="fileStatus"></div>
+            </section>
+
+            <!-- 步驟2: 基本資料輸入 -->
+            <section class="step" id="step2" style="display: none;">
+                <h2>步驟 2: 基本資料設定</h2>
+                <form id="configForm">
+                    <div class="form-group">
+                        <label for="staffCount">美容師/護理師總人數:</label>
+                        <input type="number" id="staffCount" min="1" required>
+                        <span class="form-help">請輸入美容師和護理師的總人數</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="managerName">店長名稱:</label>
+                        <input type="text" id="managerName" placeholder="如果沒有店長請留空">
+                        <span class="form-help">可選：如果有店長請輸入名稱</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="highTarget">高標達標金額:</label>
+                        <input type="number" id="highTarget" min="0" step="10000" placeholder="例如: 4000000">
+                        <span class="form-help">可選：設定高標達標獎金的業績門檻</span>
+                    </div>
+
+                    <button type="submit" class="btn btn-success">開始計算</button>
+                </form>
+            </section>
+
+            <!-- 步驟3: 計算進度 -->
+            <section class="step" id="step3" style="display: none;">
+                <h2>步驟 3: 計算進度</h2>
+                <div class="calculation-progress">
+                    <div class="progress-steps">
+                        <div class="progress-step" id="step-product">
+                            <div class="step-icon">🛍️</div>
+                            <div class="step-text">統計產品銷售</div>
+                            <div class="step-status" id="status-product">等待中...</div>
+                        </div>
+                        <div class="progress-step" id="step-team">
+                            <div class="step-icon">👥</div>
+                            <div class="step-text">計算團體獎金</div>
+                            <div class="step-status" id="status-team">等待中...</div>
+                        </div>
+                        <div class="progress-step" id="step-individual">
+                            <div class="step-icon">👤</div>
+                            <div class="step-text">計算個人獎金</div>
+                            <div class="step-status" id="status-individual">等待中...</div>
+                        </div>
+                        <div class="progress-step" id="step-salary">
+                            <div class="step-icon">💰</div>
+                            <div class="step-text">計算薪資明細</div>
+                            <div class="step-status" id="status-salary">等待中...</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 步驟4: 結果顯示 -->
+            <section class="step" id="step4" style="display: none;">
+                <h2>計算結果</h2>
+
+                <!-- 結果選項卡 -->
+                <div class="result-tabs">
+                    <button class="tab-button active" onclick="showTab('consultant')">顧問獎金</button>
+                    <button class="tab-button" onclick="showTab('staff')">員工獎金</button>
+                    <button class="tab-button" onclick="showTab('salary')">薪資明細</button>
+                    <button class="tab-button" onclick="showTab('summary')">統計摘要</button>
+                </div>
+
+                <!-- 顧問獎金明細 -->
+                <div class="tab-content active" id="tab-consultant">
+                    <h3>顧問獎金明細</h3>
+                    <div id="consultantResults"></div>
+                </div>
+
+                <!-- 員工獎金明細 -->
+                <div class="tab-content" id="tab-staff">
+                    <h3>美容師/護理師獎金</h3>
+                    <div id="staffResults"></div>
+                </div>
+
+                <!-- 薪資明細 -->
+                <div class="tab-content" id="tab-salary">
+                    <h3>個別員工薪資明細</h3>
+                    <div id="salaryResults"></div>
+                </div>
+
+                <!-- 統計摘要 -->
+                <div class="tab-content" id="tab-summary">
+                    <h3>統計摘要</h3>
+                    <div id="summaryResults"></div>
+                </div>
+
+                <!-- 操作按鈕 -->
+                <div class="result-actions">
+                    <button class="btn btn-secondary" onclick="resetCalculation()">重新計算</button>
+                    <button class="btn btn-primary" onclick="exportResults()">匯出結果</button>
+                </div>
+            </section>
+        </main>
+
+        <!-- 錯誤訊息 -->
+        <div class="error-message" id="errorMessage" style="display: none;">
+            <div class="error-content">
+                <span class="error-icon">⚠️</span>
+                <span class="error-text" id="errorText"></span>
+                <button class="error-close" onclick="hideError()">×</button>
+            </div>
+        </div>
+
+        <!-- 載入遮罩 -->
+        <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+            <div class="loading-content">
+                <div class="loading-spinner"></div>
+                <p>處理中，請稍候...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
