@@ -762,8 +762,9 @@ def main():
                 for name, data in results['consultant_bonuses'].items():
                     with st.container():
                         st.markdown(f"**{name}**")
-                        col1, col2, col3, col4 = st.columns(4)
 
+                        # 第一行：個人業績和消耗
+                        col1, col2, col3, col4 = st.columns(4)
                         with col1:
                             st.metric("個人業績", format_currency(data['personal_performance']))
                         with col2:
@@ -773,8 +774,25 @@ def main():
                         with col4:
                             st.metric("團體消耗獎金", format_currency(data['consumption_bonus']))
 
+                        # 第二行：個人業績獎金和個人消耗獎金
+                        if results.get('individual_bonuses') and name in results['individual_bonuses']:
+                            individual_data = results['individual_bonuses'][name]
+
+                            st.markdown("#### 個人獎金（累進制）")
+                            col1, col2, col3, col4 = st.columns(4)
+
+                            with col1:
+                                st.metric("個人業績獎金", format_currency(individual_data['individual_performance_bonus']))
+                            with col2:
+                                st.metric("個人消耗獎金", format_currency(individual_data['individual_consumption_bonus']))
+                            with col3:
+                                if individual_data.get('performance_incentive_bonus', 0) > 0:
+                                    st.metric("業績激勵獎金", format_currency(individual_data['performance_incentive_bonus']))
+                            with col4:
+                                st.metric("個人獎金小計", format_currency(individual_data['individual_total']))
+
                         total_bonus = data['performance_bonus'] + data['consumption_bonus']
-                        st.metric("**總獎金**", format_currency(total_bonus))
+                        st.metric("**團體總獎金**", format_currency(total_bonus))
 
                         if not data.get('product_qualified', True):
                             st.warning("⚠️ 產品未達標，團體獎金已清零")
