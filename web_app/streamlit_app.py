@@ -203,6 +203,47 @@ class OnlyBeautySalaryCalculator:
                 break
         return total
 
+    def get_vip_statistics(self, file_bytes) -> Dict:
+        """統計所有 sheet 的 VIP 項目 (D17 以下 = VIP, E 欄 = 項目名稱)"""
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp_file:
+                tmp_file.write(file_bytes)
+                tmp_file_path = tmp_file.name
+
+            xl_file = pd.ExcelFile(tmp_file_path)
+            sheet_names = xl_file.sheet_names
+            vip_statistics = {}
+
+            for sheet_name in sheet_names:
+                try:
+                    df = pd.read_excel(tmp_file_path, sheet_name=sheet_name, header=None)
+
+                    # 從第17行開始 (index 16)
+                    for row_idx in range(16, len(df)):
+                        d_cell = df.iloc[row_idx, 3] if row_idx < len(df) and 3 < len(df.columns) else None
+
+                        # 檢查 D 欄是否包含 "VIP"
+                        if pd.notna(d_cell) and "VIP" in str(d_cell):
+                            e_cell = df.iloc[row_idx, 4] if row_idx < len(df) and 4 < len(df.columns) else None
+
+                            if pd.notna(e_cell):
+                                item_name = str(e_cell).strip()
+
+                                if item_name not in vip_statistics:
+                                    vip_statistics[item_name] = 0
+
+                                vip_statistics[item_name] += 1
+
+                except Exception:
+                    continue
+
+            os.unlink(tmp_file_path)
+            return vip_statistics
+
+        except Exception as e:
+            st.error(f"統計 VIP 項目時發生錯誤: {e}")
+            return {}
+
     def get_product_sales_statistics(self, file_bytes) -> Dict:
         """統計所有顧問的產品銷售組數"""
         try:
@@ -654,6 +695,11 @@ def main():
                     st.session_state.calculator.manager_name = manager_name if manager_name else None
                     high_target_amount = high_target if high_target > 0 else None
 
+                    # 統計 VIP 項目
+                    with st.status("統計 VIP 項目中...", expanded=True) as status:
+                        vip_statistics = st.session_state.calculator.get_vip_statistics(st.session_state.uploaded_file_bytes)
+                        status.update(label="VIP 項目統計完成!", state="complete")
+
                     # 統計產品銷售
                     with st.status("統計產品銷售中...", expanded=True) as status:
                         product_sales = st.session_state.calculator.get_product_sales_statistics(st.session_state.uploaded_file_bytes)
@@ -690,7 +736,8 @@ def main():
                         'individual_bonuses': individual_bonuses,
                         'high_target_bonuses': high_target_bonuses,
                         'individual_staff_salaries': individual_staff_salaries,
-                        'product_bonuses': product_bonuses
+                        'product_bonuses': product_bonuses,
+                        'vip_statistics': vip_statistics
                     }
 
                     st.success("🎉 薪資計算完成！請查看下方結果。")
@@ -707,7 +754,7 @@ def main():
         results = st.session_state.results
 
         # 建立分頁
-        tab1, tab2, tab3, tab4 = st.tabs(["👥 顧問獎金", "🏢 員工獎金", "💰 薪資明細", "📈 統計摘要"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["👥 顧問獎金", "🏢 員工獎金", "💰 薪資明細", "📈 統計摘要", "💎 VIP 項目統計"])
 
         with tab1:
             st.subheader("顧問獎金明細")
@@ -868,6 +915,43 @@ def main():
                 if product_data:
                     df = pd.DataFrame(product_data)
                     st.dataframe(df, use_container_width=True)
+
+        with tab5:
+            st.subheader("VIP 項目統計")
+
+            if results.get('vip_statistics'):
+                vip_stats = results['vip_statistics']
+
+                # 顯示總計
+                total_vip_count = sum(vip_stats.values())
+                st.markdown(f"### 📊 VIP 總數: {total_vip_count}")
+
+                st.markdown("---")
+                st.markdown("### 📋 項目明細")
+
+                # 建立表格資料
+                vip_data = []
+                for item_name, count in sorted(vip_stats.items(), key=lambda x: x[1], reverse=True):
+                    vip_data.append({
+                        'VIP 項目': item_name,
+                        '數量': count
+                    })
+
+                if vip_data:
+                    df = pd.DataFrame(vip_data)
+                    st.dataframe(df, use_container_width=True, hide_index=True)
+
+                    # 視覺化圖表
+                    st.markdown("---")
+                    st.markdown("### 📊 項目分布圖")
+
+                    # 使用 Streamlit 內建的條形圖
+                    chart_df = df.set_index('VIP 項目')
+                    st.bar_chart(chart_df)
+                else:
+                    st.info("目前沒有 VIP 項目資料")
+            else:
+                st.info("目前沒有 VIP 項目資料")
 
         # 匯出功能
         st.markdown("---")
