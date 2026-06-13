@@ -711,6 +711,37 @@ def main():
                 help="設定高標達標獎金的業績門檻"
             )
 
+        # 步驟 2.5: 顧問角色與計算方式
+        st.markdown("---")
+        st.markdown('<div class="step-header">🧑‍💼 步驟 3: 顧問角色與計算方式</div>', unsafe_allow_html=True)
+        st.caption("預設「顧問・階梯」。需要的人改成 店長/副店長 或 全額。")
+
+        consultants = st.session_state.calculator.get_consultants_data()
+        role_config = {}
+        if consultants:
+            for c in consultants:
+                cname = str(c['name']).strip()
+                col_a, col_b, col_c = st.columns([2, 2, 2])
+                with col_a:
+                    st.write(cname)
+                default_role = '店長' if (manager_name and cname == manager_name.strip()) else '顧問'
+                with col_b:
+                    role = st.selectbox(
+                        "角色", ['顧問', '副店長', '店長'],
+                        index=['顧問', '副店長', '店長'].index(default_role),
+                        key=f"role_{cname}"
+                    )
+                with col_c:
+                    mode = st.selectbox(
+                        "計算方式", ['階梯', '全額'],
+                        index=0,
+                        key=f"mode_{cname}"
+                    )
+                role_config[cname] = {'role': role, 'mode': mode}
+        else:
+            st.info("上傳的 Excel 尚未讀到顧問名單。")
+        st.session_state.role_config = role_config
+
         # 步驟3: 開始計算
         st.markdown("---")
         st.markdown('<div class="step-header">🔢 步驟 3: 開始計算</div>', unsafe_allow_html=True)
@@ -742,7 +773,11 @@ def main():
 
                     # 計算個人獎金
                     with st.status("計算個人獎金中...", expanded=True) as status:
-                        individual_bonuses = st.session_state.calculator.calculate_individual_bonus(consultant_bonuses, high_target_amount)
+                        individual_bonuses = st.session_state.calculator.calculate_individual_bonus(
+                            consultant_bonuses,
+                            high_target_amount,
+                            st.session_state.get('role_config')
+                        )
                         status.update(label="個人獎金計算完成!", state="complete")
 
                     # 計算高標達標獎金
