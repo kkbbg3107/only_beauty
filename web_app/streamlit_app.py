@@ -841,7 +841,9 @@ def main():
                         if results.get('individual_bonuses') and name in results['individual_bonuses']:
                             individual_data = results['individual_bonuses'][name]
 
-                            st.markdown("#### 個人獎金（累進制）")
+                            _role = individual_data.get('role', '顧問')
+                            _mode = individual_data.get('mode', '階梯')
+                            st.markdown(f"#### 個人獎金（{_role}・{_mode}）")
                             col1, col2, col3, col4 = st.columns(4)
 
                             with col1:
