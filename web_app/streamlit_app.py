@@ -398,9 +398,10 @@ class OnlyBeautySalaryCalculator:
             'total_bonus_per_person': performance_bonus_per_person + consumption_bonus_per_person
         }
 
-    def calculate_individual_bonus(self, consultant_bonuses: Dict, high_target_amount: float = None) -> Dict:
-        """計算個人業績獎金和個人消耗獎金"""
+    def calculate_individual_bonus(self, consultant_bonuses: Dict, high_target_amount: float = None, role_config: Dict = None) -> Dict:
+        """計算個人業績獎金和個人消耗獎金(支援角色與計算方式客製)"""
         individual_bonuses = {}
+        role_config = role_config or {}
 
         total_performance = self.excel_data.iloc[4, 4] if not pd.isna(self.excel_data.iloc[4, 4]) else 0
         store_achieved = high_target_amount and total_performance >= high_target_amount
@@ -409,19 +410,23 @@ class OnlyBeautySalaryCalculator:
             performance = bonus_data['personal_performance']
             consumption = bonus_data['personal_consumption']
 
-            is_manager = (name == self.manager_name)
+            cfg = role_config.get(name, {})
+            role = cfg.get('role') or ('店長' if name == self.manager_name else '顧問')
+            mode = cfg.get('mode', '階梯')
 
-            if is_manager:
+            if role == '店長':
                 perf_levels = self.manager_performance_levels
                 cons_levels = self.manager_consumption_levels
-                role = "店長"
+            elif role == '副店長':
+                perf_levels = self.deputy_performance_levels
+                cons_levels = self.deputy_consumption_levels
             else:
                 perf_levels = self.consultant_performance_levels
                 cons_levels = self.consultant_consumption_levels
-                role = "顧問"
 
-            individual_performance_bonus = self.calc_progressive_bonus(performance, perf_levels)
-            individual_consumption_bonus = self.calc_progressive_bonus(consumption, cons_levels)
+            calc = self.calc_full_amount_bonus if mode == '全額' else self.calc_progressive_bonus
+            individual_performance_bonus = calc(performance, perf_levels)
+            individual_consumption_bonus = calc(consumption, cons_levels)
 
             performance_incentive_bonus = 0
             if performance >= 1680000 and store_achieved:
@@ -429,6 +434,7 @@ class OnlyBeautySalaryCalculator:
 
             individual_bonuses[name] = {
                 'role': role,
+                'mode': mode,
                 'individual_performance_bonus': individual_performance_bonus,
                 'individual_consumption_bonus': individual_consumption_bonus,
                 'performance_incentive_bonus': performance_incentive_bonus,
