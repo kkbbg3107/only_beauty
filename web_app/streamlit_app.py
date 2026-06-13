@@ -648,8 +648,9 @@ def main():
         st.header("📋 操作步驟")
         st.write("1. 上傳Excel檔案")
         st.write("2. 設定基本參數")
-        st.write("3. 計算薪資")
-        st.write("4. 查看結果")
+        st.write("3. 設定角色與計算方式")
+        st.write("4. 計算薪資")
+        st.write("5. 查看結果")
         st.markdown("---")
 
     # 步驟1: 檔案上傳
@@ -724,11 +725,10 @@ def main():
                 col_a, col_b, col_c = st.columns([2, 2, 2])
                 with col_a:
                     st.write(cname)
-                default_role = '店長' if (manager_name and cname == manager_name.strip()) else '顧問'
                 with col_b:
                     role = st.selectbox(
                         "角色", ['顧問', '副店長', '店長'],
-                        index=['顧問', '副店長', '店長'].index(default_role),
+                        index=0,
                         key=f"role_{cname}"
                     )
                 with col_c:
@@ -744,7 +744,7 @@ def main():
 
         # 步驟3: 開始計算
         st.markdown("---")
-        st.markdown('<div class="step-header">🔢 步驟 3: 開始計算</div>', unsafe_allow_html=True)
+        st.markdown('<div class="step-header">🔢 步驟 4: 開始計算</div>', unsafe_allow_html=True)
 
         if st.button("🚀 開始計算薪資", type="primary", use_container_width=True):
             try:
@@ -812,7 +812,7 @@ def main():
     # 步驟4: 顯示結果
     if st.session_state.results:
         st.markdown("---")
-        st.markdown('<div class="step-header">📊 步驟 4: 計算結果</div>', unsafe_allow_html=True)
+        st.markdown('<div class="step-header">📊 步驟 5: 計算結果</div>', unsafe_allow_html=True)
 
         results = st.session_state.results
 
