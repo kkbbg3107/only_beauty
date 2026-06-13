@@ -108,6 +108,20 @@ class OnlyBeautySalaryCalculator:
             (600001, float('inf'), 0.012)
         ]
 
+        # 副店長 個人業績 / 個人消耗 等級表
+        self.deputy_performance_levels = [
+            (0, 800000, 0.005),
+            (800001, 1400000, 0.008),
+            (1400001, 1900000, 0.012),
+            (1900001, float('inf'), 0.016)
+        ]
+
+        self.deputy_consumption_levels = [
+            (0, 400000, 0.010),
+            (400001, 900000, 0.012),
+            (900001, float('inf'), 0.018)
+        ]
+
         # 高標達標獎金設定
         self.high_target_bonuses = {
             '美容師': 5000,
@@ -202,6 +216,14 @@ class OnlyBeautySalaryCalculator:
             if amount <= max_val:
                 break
         return total
+
+    def calc_full_amount_bonus(self, amount: float, levels: List[tuple]) -> float:
+        """全額抽成:整筆金額 × 所落最高級距的單一費率"""
+        selected_rate = levels[0][2]
+        for min_val, max_val, rate in levels:
+            if amount > min_val:
+                selected_rate = rate
+        return amount * selected_rate
 
     def get_vip_statistics(self, file_bytes) -> Dict:
         """統計所有 sheet 的 VIP 項目 (D17 以下 = VIP, E 欄 = 項目名稱)"""
