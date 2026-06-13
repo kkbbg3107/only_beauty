@@ -715,9 +715,14 @@ def main():
         # 步驟 2.5: 顧問角色與計算方式
         st.markdown("---")
         st.markdown('<div class="step-header">🧑‍💼 步驟 3: 顧問角色與計算方式</div>', unsafe_allow_html=True)
-        st.caption("預設「顧問・階梯」。需要的人改成 店長/副店長 或 全額。")
+        st.caption("預設「顧問・階梯」;「店長名稱」欄填的人會自動設為店長。需要的人改成 店長/副店長 或 全額。")
 
         consultants = st.session_state.calculator.get_consultants_data()
+        # 「店長名稱」欄位填寫/變更時,將該人預設角色設為店長(之後仍可手動調整)
+        _mgr = manager_name.strip() if manager_name else ''
+        if _mgr and _mgr != st.session_state.get('_prev_manager_name'):
+            st.session_state[f"role_{_mgr}"] = '店長'
+            st.session_state['_prev_manager_name'] = _mgr
         role_config = {}
         if consultants:
             for c in consultants:

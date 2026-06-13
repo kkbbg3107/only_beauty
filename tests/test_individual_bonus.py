@@ -2,6 +2,8 @@ import os
 import sys
 import warnings
 
+import pandas as pd
+
 warnings.filterwarnings("ignore")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "web_app"))
 
@@ -67,9 +69,6 @@ def test_progressive_deputy_consumption():
     assert round(got) == 38213
 
 
-import pandas as pd
-
-
 def _calc_with_data():
     c = make_calc()
     # calculate_individual_bonus 會讀 excel_data.iloc[4,4](總業績),給個 10x10 的 0
@@ -126,3 +125,10 @@ def test_individual_bonus_default_manager_name():
     out = c.calculate_individual_bonus(consultant_bonuses, None)
     assert out["店長甲"]["role"] == "店長"
     assert out["店長甲"]["mode"] == "階梯"
+
+
+def test_full_amount_manager_performance_liao():
+    c = make_calc()
+    # 廖政翔 業績 2,158,139 店長/全額 × 2.1% = 45,321
+    got = c.calc_full_amount_bonus(2158139, c.manager_performance_levels)
+    assert round(got) == 45321
