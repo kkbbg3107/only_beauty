@@ -108,6 +108,20 @@ class OnlyBeautySalaryCalculator:
             (600001, float('inf'), 0.012)
         ]
 
+        # 副店長 個人業績 / 個人消耗 等級表
+        self.deputy_performance_levels = [
+            (0, 800000, 0.005),
+            (800001, 1400000, 0.008),
+            (1400001, 1900000, 0.012),
+            (1900001, float('inf'), 0.016)
+        ]
+
+        self.deputy_consumption_levels = [
+            (0, 400000, 0.010),
+            (400001, 900000, 0.012),
+            (900001, float('inf'), 0.018)
+        ]
+
         # 高標達標獎金設定
         self.high_target_bonuses = {
             '美容師': 5000,
@@ -202,6 +216,14 @@ class OnlyBeautySalaryCalculator:
             if amount <= max_val:
                 break
         return total
+
+    def calc_full_amount_bonus(self, amount: float, levels: List[tuple]) -> float:
+        """全額抽成:整筆金額 × 所落最高級距的單一費率"""
+        selected_rate = levels[0][2]
+        for min_val, max_val, rate in levels:
+            if amount > min_val:
+                selected_rate = rate
+        return amount * selected_rate
 
     def get_vip_statistics(self, file_bytes) -> Dict:
         """統計所有 sheet 的 VIP 項目 (D17 以下 = VIP, E 欄 = 項目名稱)"""
@@ -376,9 +398,10 @@ class OnlyBeautySalaryCalculator:
             'total_bonus_per_person': performance_bonus_per_person + consumption_bonus_per_person
         }
 
-    def calculate_individual_bonus(self, consultant_bonuses: Dict, high_target_amount: float = None) -> Dict:
-        """計算個人業績獎金和個人消耗獎金"""
+    def calculate_individual_bonus(self, consultant_bonuses: Dict, high_target_amount: float = None, role_config: Dict = None) -> Dict:
+        """計算個人業績獎金和個人消耗獎金(支援角色與計算方式客製)"""
         individual_bonuses = {}
+        role_config = role_config or {}
 
         total_performance = self.excel_data.iloc[4, 4] if not pd.isna(self.excel_data.iloc[4, 4]) else 0
         store_achieved = high_target_amount and total_performance >= high_target_amount
@@ -387,19 +410,23 @@ class OnlyBeautySalaryCalculator:
             performance = bonus_data['personal_performance']
             consumption = bonus_data['personal_consumption']
 
-            is_manager = (name == self.manager_name)
+            cfg = role_config.get(name, {})
+            role = cfg.get('role') or ('店長' if name == self.manager_name else '顧問')
+            mode = cfg.get('mode', '階梯')
 
-            if is_manager:
+            if role == '店長':
                 perf_levels = self.manager_performance_levels
                 cons_levels = self.manager_consumption_levels
-                role = "店長"
+            elif role == '副店長':
+                perf_levels = self.deputy_performance_levels
+                cons_levels = self.deputy_consumption_levels
             else:
                 perf_levels = self.consultant_performance_levels
                 cons_levels = self.consultant_consumption_levels
-                role = "顧問"
 
-            individual_performance_bonus = self.calc_progressive_bonus(performance, perf_levels)
-            individual_consumption_bonus = self.calc_progressive_bonus(consumption, cons_levels)
+            calc = self.calc_full_amount_bonus if mode == '全額' else self.calc_progressive_bonus
+            individual_performance_bonus = calc(performance, perf_levels)
+            individual_consumption_bonus = calc(consumption, cons_levels)
 
             performance_incentive_bonus = 0
             if performance >= 1680000 and store_achieved:
@@ -407,6 +434,7 @@ class OnlyBeautySalaryCalculator:
 
             individual_bonuses[name] = {
                 'role': role,
+                'mode': mode,
                 'individual_performance_bonus': individual_performance_bonus,
                 'individual_consumption_bonus': individual_consumption_bonus,
                 'performance_incentive_bonus': performance_incentive_bonus,
@@ -620,8 +648,9 @@ def main():
         st.header("📋 操作步驟")
         st.write("1. 上傳Excel檔案")
         st.write("2. 設定基本參數")
-        st.write("3. 計算薪資")
-        st.write("4. 查看結果")
+        st.write("3. 設定角色與計算方式")
+        st.write("4. 計算薪資")
+        st.write("5. 查看結果")
         st.markdown("---")
 
     # 步驟1: 檔案上傳
@@ -683,9 +712,44 @@ def main():
                 help="設定高標達標獎金的業績門檻"
             )
 
+        # 步驟 2.5: 顧問角色與計算方式
+        st.markdown("---")
+        st.markdown('<div class="step-header">🧑‍💼 步驟 3: 顧問角色與計算方式</div>', unsafe_allow_html=True)
+        st.caption("預設「顧問・階梯」;「店長名稱」欄填的人會自動設為店長。需要的人改成 店長/副店長 或 全額。")
+
+        consultants = st.session_state.calculator.get_consultants_data()
+        # 「店長名稱」欄位填寫/變更時,將該人預設角色設為店長(之後仍可手動調整)
+        _mgr = manager_name.strip() if manager_name else ''
+        if _mgr and _mgr != st.session_state.get('_prev_manager_name'):
+            st.session_state[f"role_{_mgr}"] = '店長'
+            st.session_state['_prev_manager_name'] = _mgr
+        role_config = {}
+        if consultants:
+            for c in consultants:
+                cname = str(c['name']).strip()
+                col_a, col_b, col_c = st.columns([2, 2, 2])
+                with col_a:
+                    st.write(cname)
+                with col_b:
+                    role = st.selectbox(
+                        "角色", ['顧問', '副店長', '店長'],
+                        index=0,
+                        key=f"role_{cname}"
+                    )
+                with col_c:
+                    mode = st.selectbox(
+                        "計算方式", ['階梯', '全額'],
+                        index=0,
+                        key=f"mode_{cname}"
+                    )
+                role_config[cname] = {'role': role, 'mode': mode}
+        else:
+            st.info("上傳的 Excel 尚未讀到顧問名單。")
+        st.session_state.role_config = role_config
+
         # 步驟3: 開始計算
         st.markdown("---")
-        st.markdown('<div class="step-header">🔢 步驟 3: 開始計算</div>', unsafe_allow_html=True)
+        st.markdown('<div class="step-header">🔢 步驟 4: 開始計算</div>', unsafe_allow_html=True)
 
         if st.button("🚀 開始計算薪資", type="primary", use_container_width=True):
             try:
@@ -714,7 +778,11 @@ def main():
 
                     # 計算個人獎金
                     with st.status("計算個人獎金中...", expanded=True) as status:
-                        individual_bonuses = st.session_state.calculator.calculate_individual_bonus(consultant_bonuses, high_target_amount)
+                        individual_bonuses = st.session_state.calculator.calculate_individual_bonus(
+                            consultant_bonuses,
+                            high_target_amount,
+                            st.session_state.get('role_config')
+                        )
                         status.update(label="個人獎金計算完成!", state="complete")
 
                     # 計算高標達標獎金
@@ -749,7 +817,7 @@ def main():
     # 步驟4: 顯示結果
     if st.session_state.results:
         st.markdown("---")
-        st.markdown('<div class="step-header">📊 步驟 4: 計算結果</div>', unsafe_allow_html=True)
+        st.markdown('<div class="step-header">📊 步驟 5: 計算結果</div>', unsafe_allow_html=True)
 
         results = st.session_state.results
 
@@ -778,7 +846,9 @@ def main():
                         if results.get('individual_bonuses') and name in results['individual_bonuses']:
                             individual_data = results['individual_bonuses'][name]
 
-                            st.markdown("#### 個人獎金（累進制）")
+                            _role = individual_data.get('role', '顧問')
+                            _mode = individual_data.get('mode', '階梯')
+                            st.markdown(f"#### 個人獎金（{_role}・{_mode}）")
                             col1, col2, col3, col4 = st.columns(4)
 
                             with col1:
